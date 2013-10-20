@@ -2,8 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="c7f2df6e-b6e8-4645-a179-934756354a23" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/lib/cleap" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/.gitmodules" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/lib/cleap" afterPath="$PROJECT_DIR$/lib/cleap" />
     </list>
     <ignored path="blender.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -56,7 +55,7 @@
       <file leaf-file-name="README.md" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/README.md">
           <provider selected="true" editor-type-id="text-editor">
-            <state line="50" column="0" selection-start="1287" selection-end="1436" vertical-scroll-proportion="0.80333734" vertical-offset="76" max-vertical-offset="930">
+            <state line="38" column="39" selection-start="973" selection-end="975" vertical-scroll-proportion="0.5887962" vertical-offset="76" max-vertical-offset="930">
               <folding />
             </state>
           </provider>
@@ -445,7 +444,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/README.md">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="50" column="0" selection-start="1287" selection-end="1436" vertical-scroll-proportion="0.80333734" vertical-offset="76" max-vertical-offset="930">
+        <state line="38" column="39" selection-start="973" selection-end="975" vertical-scroll-proportion="0.5887962" vertical-offset="76" max-vertical-offset="930">
           <folding />
         </state>
       </provider>
