@@ -12,6 +12,7 @@
 # limitations under the License.
 import os
 import sys
+import math
 from os.path import dirname, join, abspath
 
 import bpy
@@ -129,22 +130,30 @@ class track(bpy.types.Operator):
         y = frame.hands[0].fingers[0].position.points[1] - frame.bounds.center.points[1]
         z = frame.hands[0].fingers[0].position.points[2] - frame.bounds.center.points[2]
 
-        # Apply arbitrary scaling to make it more useable
-        x = x / 50.0
-        y = y / 50.0
-        z = z / 50.0
+        # Normalize
+        x = 0.0
+        y = 0.0
+        z = 1.0 - (z / frame.bounds.size.points[2])
 
-        try:
-          for t in context.scene.objects.active:
-            t.location.x = x
-            t.location.y = y
-            t.location.z = z
-        except:  # Fark, not an iterable
-          t = context.scene.objects.active
-          t.location.x = x
-          t.location.y = y
-          t.location.z = z
+        # Arbitrary scaling constant
+        scale = 10.0
 
+        utils = BlenderUtils(context)
+
+        # Find the view we're working in
+        views = utils.views
+        if len(views) > 0:
+          view = views[0]
+          look_at, camera_pos, rotation = utils.camera(view)
+          z_vector = [look_at[0] - camera_pos[0], look_at[1] - camera_pos[1], look_at[2] - camera_pos[2]]
+          z_vector = utils.unit_vector(z_vector)
+          global debug
+          debug = z_vector
+
+          for o in utils.active:
+            o.location.x = z * z_vector[0] * scale
+            o.location.y = z * z_vector[1] * scale
+            o.location.z = z * z_vector[2] * scale
 
   def modal(self, context, event):
     if event.type == 'TIMER' and not self._updating:
@@ -166,3 +175,83 @@ class track(bpy.types.Operator):
     context.window_manager.event_timer_remove(self._timer)
     self._timer = None
     return {'CANCELLED'}
+
+
+class BlenderUtils(object):
+  """ Useful utilities for obscure blender functionality """
+
+  def __init__(self, context):
+    self.context = context
+
+  @property
+  def active(self):
+    """ Currently selected objects """
+    try:
+      for t in self.context.scene.objects.active:
+        yield t
+    except:  # Fark, not an iterable
+      yield self.context.scene.objects.active
+
+  @property
+  def views(self):
+    """ Returns the set of 3D views.
+        Seriously, this api is stupid. WTF.
+    """
+    rtn = []
+    for a in self.context.window.screen.areas:
+      if a.type == 'VIEW_3D':
+        rtn.append(a)
+    return rtn
+
+  def camera(self, view):
+    """ Return position, rotation data about a given view for the first space attached to it """
+    look_at = view.spaces[0].region_3d.view_location
+    matrix = view.spaces[0].region_3d.view_matrix
+    camera_pos = self.camera_position(matrix)
+    rotation = view.spaces[0].region_3d.view_rotation
+    return look_at, camera_pos, rotation
+
+  def camera_position(self, matrix):
+    """ From 4x4 matrix, calculate camera location """
+    t = (matrix[0][3], matrix[1][3], matrix[2][3])
+    r = (
+      (matrix[0][0], matrix[0][1], matrix[0][2]),
+      (matrix[1][0], matrix[1][1], matrix[1][2]),
+      (matrix[2][0], matrix[2][1], matrix[2][2])
+    )
+    rp = (
+      (-r[0][0], -r[1][0], -r[2][0]),
+      (-r[0][1], -r[1][1], -r[2][1]),
+      (-r[0][2], -r[1][2], -r[2][2])
+    )
+    output = (
+      rp[0][0] * t[0] + rp[0][1] * t[1] + rp[0][2] * t[2],
+      rp[1][0] * t[0] + rp[1][1] * t[1] + rp[1][2] * t[2],
+      rp[2][0] * t[0] + rp[2][1] * t[1] + rp[2][2] * t[2],
+    )
+    return output
+
+  def unit_vector(self, vector):
+    """ Calculate a unit vector
+    """
+    sum = vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]
+    sqrt = math.sqrt(sum)
+    if sqrt == 0:
+      sqrt = 0.01
+    return [vector[0] / sqrt, vector[1] / sqrt, vector[2] / sqrt]
+
+  def unit_vectors(self, location, matrix):
+    """ Return unit vectors for the given matrix in x, y, z domains relative to it.
+    """
+    pass
+
+  def apply_transform(self, target, matrix, magnitude, scale):
+    """ Apply a transformation to the point 'target'
+        :param target: The target (x, y, z)
+        :param matrix: The matrix being applied
+        :param magnitude: The magnitude of the matrix to apply.
+        :param scale: A scale factor to the result
+    """
+    pass
+
+debug = None

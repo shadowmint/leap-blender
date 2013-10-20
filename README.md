@@ -35,14 +35,14 @@ Move to come, currently supported are:
 
 ### Movement
 
-Select an object, and use one finger to move it around.
+Select an object, and use one finger to move it in and out relative to the camera.
 To place the object, enter second hand then remove both.
 
 #### TODO
 
-    - Should take into account current camera for correct relative motion; currently absolute xyz coordinates
-    - Support scaling for large objects; currently the 'scale' is the leap scale, ie. 0 -> ~300
-    - Relative motion?
+    - Support x and y axis too
+    - Support scaling for large objects; currently the 'scale' is arbitrary
+    - Better way to 'halt' once done moving stuff around.
 
 ## Extra
 
