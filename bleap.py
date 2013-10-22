@@ -37,10 +37,12 @@ controller = None
 def register():
   """ Regsiter this operator """
   bpy.utils.register_module(__name__, verbose=True)
+  start()
 
 
 def unregister():
   """ Remove this operator """
+  stop()
   bpy.utils.unregister_module(__name__)
 
 
@@ -113,47 +115,17 @@ class track(bpy.types.Operator):
   bl_label = "LEAP motion tracking"
 
   def __init__(self, *args, **kwargs):
+    global controller
     super(track, self).__init__(*args, **kwargs)
     self._updating = False
     self._timer = None
-    global controller
     self._leap = controller
 
   def track(self, context):
     """ Actually convert leap data into useful data like motion """
+    ui = LeapObjectMove(context)
     for frame in self._leap.poll():
-      if len(frame.hands) == 1 and len(frame.hands[0].fingers) == 1:
-
-        # Make the origin 0,0,0 instead of mystical LEAP units
-        # (which makes Z = rubbing your face in the leap device)
-        x = frame.hands[0].fingers[0].position.points[0] - frame.bounds.center.points[0]
-        y = frame.hands[0].fingers[0].position.points[1] - frame.bounds.center.points[1]
-        z = frame.hands[0].fingers[0].position.points[2] - frame.bounds.center.points[2]
-
-        # Normalize
-        x = 0.0
-        y = 0.0
-        z = 1.0 - (z / frame.bounds.size.points[2])
-
-        # Arbitrary scaling constant
-        scale = 10.0
-
-        utils = BlenderUtils(context)
-
-        # Find the view we're working in
-        views = utils.views
-        if len(views) > 0:
-          view = views[0]
-          look_at, camera_pos, rotation = utils.camera(view)
-          z_vector = [look_at[0] - camera_pos[0], look_at[1] - camera_pos[1], look_at[2] - camera_pos[2]]
-          z_vector = utils.unit_vector(z_vector)
-          global debug
-          debug = z_vector
-
-          for o in utils.active:
-            o.location.x = z * z_vector[0] * scale
-            o.location.y = z * z_vector[1] * scale
-            o.location.z = z * z_vector[2] * scale
+      ui.on_frame(frame)
 
   def modal(self, context, event):
     if event.type == 'TIMER' and not self._updating:
@@ -177,7 +149,7 @@ class track(bpy.types.Operator):
     return {'CANCELLED'}
 
 
-class BlenderUtils(object):
+class BleapUtils(object):
   """ Useful utilities for obscure blender functionality """
 
   def __init__(self, context):
@@ -240,18 +212,117 @@ class BlenderUtils(object):
       sqrt = 0.01
     return [vector[0] / sqrt, vector[1] / sqrt, vector[2] / sqrt]
 
-  def unit_vectors(self, location, matrix):
+  def unit_vectors(self, look_at, camera_pos, rotation):
     """ Return unit vectors for the given matrix in x, y, z domains relative to it.
     """
-    pass
+    z_vector = [look_at[0] - camera_pos[0], look_at[1] - camera_pos[1], look_at[2] - camera_pos[2]]
+    z_vector = self.unit_vector(z_vector)
 
-  def apply_transform(self, target, matrix, magnitude, scale):
+    y_vector = [0, 1, 0]
+    y_vector = self.rotate_vector(y_vector, rotation)
+
+    x_vector = [1, 0, 0]
+    x_vector = self.rotate_vector(x_vector, rotation)
+
+    return x_vector, y_vector, z_vector
+
+  def add_vector(self, target, vector, magnitude, scale):
     """ Apply a transformation to the point 'target'
-        :param target: The target (x, y, z)
-        :param matrix: The matrix being applied
-        :param magnitude: The magnitude of the matrix to apply.
+        :param target: An [x, y, z] vector to modify.
+        :param vector: The [x, y, z] vector to apply.
+        :param magnitude: The magnitude of the vector to apply.
         :param scale: A scale factor to the result
     """
+    target[0] += magnitude * vector[0] * scale
+    target[1] += magnitude * vector[1] * scale
+    target[2] += magnitude * vector[2] * scale
+
+  def normalized_input(self, frame, fingers):
+    """ Returns normalized 0.0 -> 1.0 input for the 3 dimensions of leap input
+        The 'location' it given by the averaged position of the given fingers.
+        :param frame: The frame object.
+        :param fingers: The fingers to use.
+    """
+    avg = [0, 0, 0]
+    for f in fingers:
+      avg[0] += f.position.points[0]
+      avg[1] += f.position.points[1]
+      avg[2] += f.position.points[2]
+    avg[0] = avg[0] / float(len(fingers))
+    avg[1] = avg[1] / float(len(fingers))
+    avg[2] = avg[2] / float(len(fingers))
+
+    x = (avg[0] - frame.bounds.center.points[0]) / frame.bounds.size.points[0]
+    y = (avg[1] - frame.bounds.center.points[1]) / frame.bounds.size.points[1]
+    z = 1.0 - (avg[2] - frame.bounds.center.points[2]) / frame.bounds.size.points[2]
+
+    return [x, y, z]
+
+  def quanternion_conj(self, q):
+    """ Calculate the conjugate of a quaternion (w, x, y, z)
+        :param q: The quaternion to process
+    """
+    return [q[0], -q[1], -q[2], -q[3]]
+
+  def hamilton_transform(self, a, b):
+    """ Calculate the hamilton transform AB between two quaternions a and b
+    """
+    return [
+      a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+      a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+      a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+      a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+    ]
+
+  def rotate_vector(self, vector, quaternion):
+    """ Rotate the vector (x,y,z) by the quaternion (w,x,y,z)
+    """
+    p = [0, vector[0], vector[1], vector[2]]
+    r = quaternion
+    rx = self.quanternion_conj(quaternion)
+    output = self.hamilton_transform(self.hamilton_transform(r, p), rx)
+    return output[1:]  # drop w component
+
+
+class LeapInteraction(object):
+  """ Common base for interaction strategies """
+
+  def __init__(self, context):
+    self.utils = BleapUtils(context)
+
+  def on_frame(self, frame):
     pass
 
-debug = None
+
+class LeapObjectMove(LeapInteraction):
+  """ Move objects using the right hand with left hand as command mode.
+
+      Left 5-fingers: stop motion of object
+      Left 3-fingers: resume motion of object
+
+      Right 1-finger: control location and rotation relative to camera.
+  """
+
+  def on_frame(self, frame):
+    if len(frame.hands) == 1 and len(frame.hands[0].fingers) == 1:
+
+      # Normalized leap coordinates
+      x, y, z = self.utils.normalized_input(frame, [frame.hands[0].fingers[0]])
+
+      # Arbitrary scaling constant
+      scale = 10.0
+
+      # Find the view we're working in
+      views = self.utils.views
+      if len(views) > 0:
+        view = views[0]  # Well, the first view that we can find anyway
+        x_vector, y_vector, z_vector = self.utils.unit_vectors(*self.utils.camera(view))
+
+        for o in self.utils.active:
+          t = [0, 0, 0]
+          self.utils.add_vector(t, x_vector, x, scale)
+          self.utils.add_vector(t, y_vector, y, scale)
+          self.utils.add_vector(t, z_vector, z, scale)
+          o.location.x = t[0]
+          o.location.y = t[1]
+          o.location.z = t[2]

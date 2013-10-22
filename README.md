@@ -40,17 +40,21 @@ To place the object, enter second hand then remove both.
 
 #### TODO
 
-    - Support x and y axis too
     - Support scaling for large objects; currently the 'scale' is arbitrary
     - Better way to 'halt' once done moving stuff around.
+
+### TODO
+
+    - Use finger vector for rotation while in motion mode
+    - Use palm rotation to control camera
+    - key bindings?
 
 ## Extra
 
 In unindented mode for easy copy-paste...
 
 import sys
-sys.path.append('/Users/doug/projects/blender') # <-- Or you cloned path
+sys.path.append('/Users/doug/projects/blender/leap-blender') # <-- Or you cloned path
 import bleap
 bleap.register()
-bleap.start()
 bpy.ops.bleap.track()
